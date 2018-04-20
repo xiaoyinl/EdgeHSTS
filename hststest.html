@@ -1,0 +1,164 @@
+<!DOCTYPE html>
+<html>
+<head>
+    <title>HSTS Preload Test</title>
+    <meta charset="utf-8" />
+    <style>
+        div.column {
+            width: 33%;
+            float: left;
+        }
+        body {
+            background-color: black;
+            color: white;
+        }
+    </style>
+    <script>
+        var entries = null;
+        var num_good = 0;  // domains that are preloaded with subdomains
+        var num_bad = 0;   // domains that are not preloaded
+        var num_nosub = 0; // domains that are preloaded without subdomains
+        var num_skipped = 0;  // non-HSTS entries
+        var testPaused = false;
+        var saved_i = 0;
+        var arr_hstslist = [];
+        var arr_nohstslist = [];
+        var arr_nosublist = [];
+
+        var element = document.createElement("img");
+        function testHSTS(i) {
+            if (testPaused) {
+                saved_i = i;
+                document.getElementById("btn_resume").disabled = false;                
+                displayList();
+                return;
+            }
+            if (i > entries.length - 1) {
+                document.getElementById("btn_pause").disabled = true;
+                document.getElementById("status").textContent = "Finished!";
+                displayList();
+                return;
+            }
+            document.getElementById("status").textContent = i;
+            var entry = entries[i];
+            i++;
+            if (entry.mode === "force-https") {
+                var domain = entry.name;
+                
+                element.onerror = function () {
+                    // top-level domain is preloaded. Next check its subdomain:
+                    //var element2 = document.createElement("img");
+                    element.onerror = function () {
+                        // subdomain is preloaded too
+                        arr_hstslist.push(domain);
+                        num_good++;
+                        document.getElementById("num_good").textContent = num_good;
+                        setTimeout(function () { testHSTS(i);}, 0);
+                    };
+                    element.onload = function () {
+                        // subdomain isn't preloaded
+                        if (entry.include_subdomains) {
+                            arr_nosublist.push(domain);
+                            num_nosub++;
+                            document.getElementById("num_nosubdomain").textContent = num_nosub;
+                        } else {
+                            arr_hstslist.push(domain);
+                            num_good++;
+                            document.getElementById("num_good").textContent = num_good;
+                        }
+                        setTimeout(function () { testHSTS(i); }, 20);
+                    };
+                    element.src = "http://www." + domain + "/hsts.gif";
+                };
+                element.onload = function () {
+                    // no HSTS
+                    arr_nohstslist.push(domain);
+                    num_bad++;
+                    document.getElementById("num_bad").textContent = num_bad;
+                    setTimeout(function () { testHSTS(i); }, 20);
+                };
+                element.src = "http://" + domain + "/hsts.gif";
+            } else {
+                num_skipped++;
+                document.getElementById("num_skipped").textContent = num_skipped;
+                setTimeout(function () { testHSTS(i); }, 20);
+            }
+        }
+
+        function launchTests() {
+            document.getElementById("btn_start").disabled = true;
+            document.getElementById("btn_pause").disabled = false;
+            testHSTS(0);
+        }
+        function pauseTests() {
+            testPaused = true;
+            document.getElementById("btn_pause").disabled = true;            
+        }
+        function resumeTests() {
+            testPaused = false;
+            document.getElementById("btn_pause").disabled = false;
+            document.getElementById("btn_resume").disabled = true;
+            testHSTS(saved_i);
+        }
+        function displayList() {
+            var html_hstslist = "";
+            var html_nohstslist = "";
+            var html_nosublist = "";
+            var k;
+            for (k = 0; k < arr_hstslist.length; k++) {
+                html_hstslist += "<li>" + arr_hstslist[k] + "</li>";
+            }
+            for (k = 0; k < arr_nohstslist.length; k++) {
+                html_nohstslist += "<li>" + arr_nohstslist[k] + "</li>";
+            }
+            for (k = 0; k < arr_nosublist.length; k++) {
+                html_nosublist += "<li>" + arr_nosublist[k] + "</li>";
+            }
+            document.getElementById("hstslist").innerHTML = html_hstslist;
+            document.getElementById("nohstslist").innerHTML = html_nohstslist;
+            document.getElementById("nosublist").innerHTML = html_nosublist;
+        }
+
+        document.addEventListener("DOMContentLoaded", function () {
+            document.getElementById("ua").textContent = navigator.userAgent;
+            document.getElementById("status").textContent = "Loading transport_security_state_static.json";
+            var xhr = new XMLHttpRequest();
+            xhr.onreadystatechange = function () {
+                if (xhr.readyState == XMLHttpRequest.DONE) {
+                    document.getElementById("status").textContent = "Finished loading transport_security_state_static.json";
+                    try {
+                        entries = JSON.parse(xhr.responseText).entries;
+                    } catch (err) {
+                        document.getElementById("status").textContent = err.message;
+                        return;
+                    }
+                    document.getElementById("num_total").textContent = entries.length;
+                    document.getElementById("btn_start").disabled = false;
+                }
+            };
+            xhr.open("GET", "transport_security_state_static.json", true);
+            xhr.send();
+        });
+    </script>
+</head>
+<body>
+    <p id="status"></p>
+    <button id="btn_start" onclick="launchTests()" disabled>Start</button>  <button id="btn_pause" onclick="pauseTests()" disabled>Pause</button>
+    <button id="btn_resume" onclick="resumeTests()" disabled>Resume</button>
+    <h3>Find HSTS preload list in your browser:</h3>
+    <p>Statistics: Total number of domains: <span id="num_total">0</span>; Skipped domains: <span id="num_skipped">0</span></p>
+    <p>User-Agent: <span id="ua"></span></p>
+    <div class="column">
+        <p><span style="color:green;">These domains are preloaded</span> (count=<span id="num_good">0</span>):</p>
+        <ol id="hstslist"></ol>
+    </div>
+    <div class="column">
+        <p><span style="color:red;">These domains are NOT preloaded</span> (count=<span id="num_bad">0</span>):</p>
+        <ol id="nohstslist"></ol>
+    </div>
+    <div class="column">
+        <p><span style="color:yellow;">These domains are preloaded WITHOUT subdomains</span> (count=<span id="num_nosubdomain">0</span>):</p>
+        <ol id="nosublist"></ol>
+    </div>
+</body>
+</html>
