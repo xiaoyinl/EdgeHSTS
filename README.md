@@ -1,5 +1,5 @@
 # EdgeHSTS
-This repo contains the HTML file which tests the HSTS preload list in browsers. For more info, see my article at https://medium.org/bugbountywriteup.
+This repo contains the HTML file which tests the HSTS preload list in browsers. For more info, see my article at https://medium.com/bugbountywriteup/find-edges-hsts-preload-list-part-i-2ee5ce6bc5aa.
 
 # transport_security_state_static.json
 The file `transport_security_state_static.json` is based on https://raw.githubusercontent.com/chromium/chromium/dee803ed55ad30b90e1a96622e2b4b5ca7ab5788/net/http/transport_security_state_static.json with comments removed, because comments are not allowed in JSON files.
